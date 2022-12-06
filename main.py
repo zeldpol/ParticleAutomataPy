@@ -4,7 +4,7 @@ import math
 
 pg.init()
 screenWidth, screenHeight = 1280, 720
-fps = 30
+fps = 2
 timer = pg.time.Clock()
 screen = pg.display.set_mode([screenWidth, screenHeight])
 
@@ -32,9 +32,9 @@ LINKS_POSSIBLE = [
     [1, 1, 2],
 ]
 COLORS = [
-    'rgb(250, 20, 20)',
-    'rgb(200, 140, 100)',
-    'rgb(80, 170, 140)',
+    (250, 20, 20),
+    (200, 140, 100),
+    (80, 170, 140),
 ]
 
 
@@ -50,35 +50,41 @@ class Particle:
     def fy(self):
         return math.floor(self.y / MAX_DIST)
 
-a=2
 
 class Field:
     particles = []
 
     def __init__(self, i, j):
         self.i = i
-        self.j = .
+        self.j = j
 
 
 fields = []
 for i in range(fw):
+    fields.append([])
     for j in range(fh):
-        fields.append(Field(i, j))
+        fields[i].append(Field(i, j))
 
 for i in range(NODE_COUNT):
-    type = random.randint(0, len(COUPLING))
+    pointType = random.randint(0, len(COUPLING))
     x = random.randint(0, screenWidth)
     y = random.randint(0, screenHeight)
-    p = Particle(type, x, y)
+    p = Particle(pointType, x, y)
     field = fields[p.fx()][p.fy()]
-    field.particles.push(p)
+    field.particles.append(p)
 
-BG = 'rgb(20, 55, 75)'
-LINK = 'rgb(255, 230, 0)'
+backgroundColor = (20, 55, 75)
+LINK = (255, 230, 0)
 
-pg.draw.circle(screen, (55, 55, 55), (random.randint(0, 1000), random.randint(0, 600)), 5)
-pg.draw.circle(screen, (55, 55, 55), (random.randint(0, 1000), random.randint(0, 600)), 5)
-pg.draw.circle(screen, (55, 55, 55), (random.randint(0, 1000), random.randint(0, 600)), 5)
+
+def draw_scene():
+    screen.fill((20, 55, 75))
+
+    for p in field.particles:
+        pg.draw.circle(screen, COLORS[p.type-1], (p.x, p.y), NODE_RADIUS)
+
+    return 0
+
 
 running = True
 
@@ -88,7 +94,8 @@ while running:
             running = False
 
     timer.tick(fps)
-    screen.fill(BG)
-    pg.display.update()
+    draw_scene()
 
+
+    pg.display.flip()
 pg.quit()
