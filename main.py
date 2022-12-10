@@ -4,7 +4,7 @@ import math
 
 pg.init()
 screenWidth, screenHeight = 1280, 720
-fps = 30
+fps = 60
 timer = pg.time.Clock()
 screen = pg.display.set_mode([screenWidth, screenHeight])
 
@@ -13,7 +13,7 @@ fw = math.floor(screenWidth / MAX_DIST) + 1
 fh = math.floor(screenHeight / MAX_DIST) + 1
 
 NODE_RADIUS = 5
-NODE_COUNT = 1000
+NODE_COUNT = 500
 SPEED = 4
 PLAYBACK_SPEED = 3
 BORDER = 30
@@ -62,6 +62,12 @@ class Field:
         self.particles = []
 
 
+class Link:
+    def __init__(self, a, b):
+        self.a = a
+        self.b = b
+
+
 fields = []
 for i in range(fw):
     column = []
@@ -77,23 +83,25 @@ for i in range(NODE_COUNT):
     field = fields[p.fx()][p.fy()]
     field.particles.append(p)
 
-backgroundColor = (20, 55, 75)
+
+BG = (20, 55, 75)
 LINK = (255, 230, 0)
 
 
 def draw_scene():
-    screen.fill((20, 55, 75))
+    screen.fill(BG)
 
     for col in fields:
         for field in col:
             for p in field.particles:
                 pg.draw.circle(screen, COLORS[p.type - 1], (p.x, p.y), NODE_RADIUS)
 
-    return 0
+                for b in p.bonds:
+                    pg.draw.line(screen, LINK, (p.x, p.y), (b.x, b.y))
+
 
 
 def logic():
-
     for col in fields:
         for field in col:
             for p in field.particles:
@@ -129,8 +137,12 @@ def logic():
                         p.y = screenHeight * 2 - p.y
                         p.sy *= -0.5
 
-    for link, a, b in links:
+    for link in links:
+        a = link.a
+        b = link.b
         d2 = (a.x - b.x) ** 2 + (a.y - b.y) ** 2
+        if d2 < NODE_RADIUS:
+            d2 = NODE_RADIUS
         if d2 > MAX_DIST ** 2 / 4:
             a.links -= 1
             b.links -= 1
@@ -139,7 +151,7 @@ def logic():
             links.remove(link)
 
         elif d2 > NODE_RADIUS ** 2 * 4:
-            angle = math.atan2(a.y-b.y, a.x - b.x)
+            angle = math.atan2(a.y - b.y, a.x - b.x)
             a.sx += math.cos(angle) * LINK_FORCE * SPEED
             a.sy += math.sin(angle) * LINK_FORCE * SPEED
             b.sx -= math.cos(angle) * LINK_FORCE * SPEED
@@ -150,9 +162,86 @@ def logic():
             for p in f.particles:
                 if p.fx() == f.i and p.fy() == f.j:
                     continue
-                print(f'({f.i},{f.j}) -> ({p.fx()},{p.fy()})')
                 f.particles.remove(p)
                 fields[p.fx()][p.fy()].particles.append(p)
+
+    # ChatGPT
+
+    for col in fields:
+        for f in col:
+            for i1, a in enumerate(f.particles):
+                for j1 in range(i1 + 1, len(f.particles)):
+                    b = f.particles[j1]
+                    apply_force(a, b)
+
+            if f.i < fw - 1:
+                field1 = fields[f.i + 1][f.j]
+                for j1 in range(len(field1.particles)):
+                    b = field1.particles[j1]
+                    apply_force(a, b)
+
+            if f.j < fh - 1:
+                field1 = fields[f.i][f.j + 1]
+                for j1 in range(len(field1.particles)):
+                    b = field1.particles[j1]
+                    apply_force(a, b)
+
+            if f.i < fw - 1 and f.j < fh - 1:
+                field1 = fields[f.i + 1][f.j + 1]
+                for j1 in range(len(field1.particles)):
+                    b = field1.particles[j1]
+                    apply_force(a, b)
+
+
+def apply_force(a, b):
+    if a == b:
+        return
+
+    d2 = (a.x - b.x) ** 2 + (a.y - b.y) ** 2
+    if d2 < NODE_RADIUS:
+        d2 = NODE_RADIUS
+    if d2 > MAX_DIST ** 2:
+        return
+
+    dA = COUPLING[a.type - 1][b.type - 1] / d2
+    dB = COUPLING[b.type - 1][a.type - 1] / d2
+    if a.links < LINKS[a.type - 1] and b.links < LINKS[b.type - 1]:
+        if d2 < MAX_DIST ** 2 / 4:
+            if b not in a.bonds and a not in b.bonds:
+                type_count_a = 0
+                for p in a.bonds:
+                    if p.type == b.type:
+                        type_count_a += 1
+                type_count_b = 0
+                for p in b.bonds:
+                    if p.type == a.type:
+                        type_count_b += 1
+                if type_count_a < LINKS_POSSIBLE[a.type - 1][b.type - 1] and type_count_b < LINKS_POSSIBLE[b.type - 1][
+                    a.type - 1]:
+                    a.bonds.append(b)
+                    b.bonds.append(a)
+                    a.links += 1
+                    b.links += 1
+                    links.append(Link(a, b))
+
+    elif b not in a.bonds and a not in b.bonds:
+        dA = 1 / d2
+        dB = 1 / d2
+
+    from math import atan2
+
+    angle = atan2(a.y - b.y, a.x - b.x)
+    if d2 < 1:
+        d2 = 1
+    if d2 < NODE_RADIUS * NODE_RADIUS * 4:
+        dA = 1 / d2
+        dB = 1 / d2
+
+    a.sx += math.cos(angle) * dA * SPEED
+    a.sy += math.sin(angle) * dA * SPEED
+    b.sx -= math.cos(angle) * dB * SPEED
+    b.sy -= math.sin(angle) * dB * SPEED
+
 
 running = True
 
@@ -160,10 +249,9 @@ while running:
     for event in pg.event.get():
         if event.type == pg.QUIT:
             running = False
-
     timer.tick(fps)
     draw_scene()
     logic()
-
     pg.display.flip()
+
 pg.quit()
